@@ -9,13 +9,15 @@ module Rouge
       tag 'coq'
       mimetypes 'text/x-coq'
 
+      # TODO: stdpp convention e.g. λ
       def self.gallina
         @gallina ||= Set.new %w(
-          as fun if in let match then else return end Type Set Prop
+          as fun λ if in let match then else return end Type Set Prop
           forall
         )
       end
 
+      # TODO all commands
       def self.coq
         @coq ||= Set.new %w(
           Definition Theorem Lemma Remark Example Fixpoint CoFixpoint
@@ -49,6 +51,7 @@ module Rouge
         )
       end
 
+      # TODO: don't do this..
       def self.terminators
         @terminators ||= Set.new %w(
           omega solve congruence reflexivity exact
@@ -56,9 +59,10 @@ module Rouge
         )
       end
 
+      # TODO compose of publication chars but are
       def self.keyopts
         @keyopts ||= Set.new %w(
-          := => -> /\\ \\/ _ ; :> : ⇒ → ↔ ⇔ ≔ ≡ ∀ ∃ ∧ ∨ ¬ ⊤ ⊥ ⊢ ⊨ ∈
+          /\\ \\/ |- || -> <- <-> => <= >= <> >-> --> <-- <--> ==> <== ~~> <~~
         )
       end
 
@@ -72,19 +76,22 @@ module Rouge
         elsif self.gallina.include? x
           return Keyword::Reserved
         elsif self.ltac.include? x
-          return Keyword::Pseudo
+          # TODO: function?
+          return Name::Function
         elsif self.terminators.include? x
-          return Name::Exception
+          return Name::Function
         elsif self.tacticals.include? x
-          return Keyword::Pseudo
+          return Name::Function
         else
-          return Name::Constant
+          return Name
         end
       end
 
-      operator = %r([\[\];,{}_()!$%&*+./:<=>?@^|~#-]+)
-      id = /(?:[a-z][\w']*)|(?:[_a-z][\w']+)/i
-      dot_id = /\.((?:[a-z][\w']*)|(?:[_a-z][\w']+))/i
+      # punctuation = %r([\[\];,{}_()!$%&*+./:<=>?@^|~#-]+)
+      punctuation = %r([\[\];,{}()!$%&*+./:<=>?@^|~#-])
+      punctuation_operator = %r([\[\];,{}_()!$%&*+./:<=>?@^|~#-]{2,})
+      id = /(?:[[:word:]][[[:word:]]']*)|(?:[_[[:word:]]][[[:word:]]']+)/
+      dot_id = /\.((?:[[:word:]][[[:word:]]']*)|(?:[_[[:word:]]][[[:word:]]']+))/
       dot_space = /\.(\s+)/
       module_type = /Module(\s+)Type(\s+)/
       set_options = /(Set|Unset)(\s+)(Universe|Printing|Implicit|Strict)(\s+)(Polymorphism|All|Notations|Arguments|Universes|Implicit)(\s*)\./m
@@ -120,20 +127,30 @@ module Rouge
         rule %r/\d[\d_]*/, Num::Integer
 
         rule %r/'(?:(\\[\\"'ntbr ])|(\\[0-9]{3})|(\\x\h{2}))'/, Str::Char
-        rule %r/'/, Keyword
+        rule %r/['`]/, Keyword
         rule %r/"/, Str::Double, :string
         rule %r/[~?]#{id}/, Name::Variable
 
-        rule %r/./ do |m|
+        # TODO operation consiting of punctuation and unknown e.g. -∗, ={A,B}=∗
+
+        # rule %r([\[\];,{}_()!$%&*+./:<=>?@^|~#-]), Punctuation
+
+        # rule %r/./, Operator
+
+        # rule %r/[^[[:word:]]]+/ do |m|
+        rule %r([\[\];,{}_()!$%&*+./:<=>?@^|~#-]+) do |m|
           match = m[0]
           if self.class.keyopts.include? match
-            token Punctuation
-          elsif match =~ operator
             token Operator
+          elsif match =~ punctuation
+            token Punctuation
           else
-            token Error
+            token Operator
           end
         end
+
+        rule %r/./, Operator
+
       end
 
       state :comment do
@@ -164,7 +181,7 @@ module Rouge
         end
         rule dot_space do |m|
           if @continue
-            token Name::Constant , @name
+            token Name , @name
           else
             token self.class.classify(@name) , @name
           end
@@ -176,7 +193,7 @@ module Rouge
         end
         rule %r// do
           if @continue
-            token Name::Constant , @name
+            token Name , @name
           else
             token self.class.classify(@name) , @name
           end
